@@ -1,0 +1,111 @@
+/*
+  File: MotionMazeController.ino
+  This Arduino sketch is written for the Lilypad Arduino-based controller in "Motion Maze".
+  It reads sensor data from an MPU6050 accelerometer, a motion sensor, and a push button.
+  The data is then sent via Serial (to be transmitted over the ZigBee module) to the Java game engine.
+  Additionally, it controls an RGB LED and a buzzer for real-time feedback.
+
+  Reputable documentation for Arduino coding can be found at:
+  https://www.arduino.cc/en/Guide/HomePage :contentReference[oaicite:2]{index=2}
+*/
+
+#include <Wire.h>
+#include <MPU6050.h>
+
+// Initialize the MPU6050 accelerometer
+MPU6050 mpu;
+
+// Define pin assignments for peripherals.
+const int motionSensorPin = 2;  // Digital pin connected to motion sensor
+const int buttonPin = 3;        // Digital pin connected to push button
+const int redLEDPin = 4;        // Digital pin for red LED
+const int greenLEDPin = 5;      // Digital pin for green LED
+const int blueLEDPin = 6;       // Digital pin for blue LED
+const int buzzerPin = 7;        // Digital pin for buzzer
+
+void setup() {
+  // Initialize Serial communication at 9600 baud (used by the ZigBee module).
+  Serial.begin(9600);
+  Wire.begin();
+  mpu.initialize();
+  
+  // Configure input and output pins.
+  pinMode(motionSensorPin, INPUT);
+  pinMode(buttonPin, INPUT_PULLUP); // Using internal pull-up resistor.
+  pinMode(redLEDPin, OUTPUT);
+  pinMode(greenLEDPin, OUTPUT);
+  pinMode(blueLEDPin, OUTPUT);
+  pinMode(buzzerPin, OUTPUT);
+  
+  // Verify MPU6050 connection.
+  if (mpu.testConnection()) {
+    Serial.println("MPU6050 connection successful");
+  } else {
+    Serial.println("MPU6050 connection failed");
+  }
+}
+
+void loop() {
+  // Read raw accelerometer values.
+  int16_t ax, ay, az;
+  mpu.getAcceleration(&ax, &ay, &az);
+  
+  // Convert raw accelerometer data to 'g' (assuming a scale factor of 16384 LSB/g).
+  float accelX = ax / 16384.0;
+  float accelY = ay / 16384.0;
+  float accelZ = az / 16384.0;
+  
+  // Read the state of the motion sensor.
+  bool motionDetected = digitalRead(motionSensorPin) == HIGH;
+  
+  // Read the state of the push button (active low).
+  bool buttonPressed = digitalRead(buttonPin) == LOW;
+  
+  // Send sensor data over Serial in CSV format:
+  // Format: accelX,accelY,accelZ,motionDetected,buttonPressed
+  Serial.print(accelX, 2);
+  Serial.print(",");
+  Serial.print(accelY, 2);
+  Serial.print(",");
+  Serial.print(accelZ, 2);
+  Serial.print(",");
+  Serial.print(motionDetected);
+  Serial.print(",");
+  Serial.println(buttonPressed);
+  
+  // Check for incoming commands from the Java game controller via ZigBee.
+  if (Serial.available() > 0) {
+    String command = Serial.readStringUntil('\n');
+    handleFeedback(command);
+  }
+  
+  delay(100); // Delay for sensor reading frequency.
+}
+
+// Function to handle feedback commands from the Java program.
+// Commands may include "GREEN", "RED", "BLUE", or "OFF" to control the LED and buzzer.
+void handleFeedback(String command) {
+  command.trim();
+  if (command == "GREEN") {
+    digitalWrite(redLEDPin, LOW);
+    digitalWrite(greenLEDPin, HIGH);
+    digitalWrite(blueLEDPin, LOW);
+    digitalWrite(buzzerPin, LOW); // Buzzer off.
+  } else if (command == "RED") {
+    digitalWrite(redLEDPin, HIGH);
+    digitalWrite(greenLEDPin, LOW);
+    digitalWrite(blueLEDPin, LOW);
+    tone(buzzerPin, 1000, 200); // Sound buzzer for 200ms.
+  } else if (command == "BLUE") {
+    digitalWrite(redLEDPin, LOW);
+    digitalWrite(greenLEDPin, LOW);
+    digitalWrite(blueLEDPin, HIGH);
+    digitalWrite(buzzerPin, LOW);
+  } else if (command == "OFF") {
+    // Turn off all outputs.
+    digitalWrite(redLEDPin, LOW);
+    digitalWrite(greenLEDPin, LOW);
+    digitalWrite(blueLEDPin, LOW);
+    digitalWrite(buzzerPin, LOW);
+  }
+}
