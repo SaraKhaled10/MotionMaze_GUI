@@ -1,176 +1,126 @@
-// File: GameController.java
-// This Java program implements the game controller for "Motion Maze".
-// It processes real-time sensor data (from the microcontroller via ZigBee)
-// using the Observer and State design patterns.
+import gnu.io.*; // RXTX library for serial communication
+import java.io.*;
+import java.util.*;
 
-// Import necessary packages
-import java.util.ArrayList;
-import java.util.List;
-
-// Observer interface for receiving sensor updates.
-interface SensorObserver {
-    void update(SensorData data);
+// === Observer Pattern Interface ===
+interface GameObserver {
+    void onEvent(String message);
 }
 
-// Subject class that notifies observers when new sensor data is available.
-class SensorSubject {
-    private List<SensorObserver> observers = new ArrayList<>();
-    private SensorData sensorData;
+// === GameState (State Pattern) ===
+abstract class GameState {
+    abstract void handleInput(GameEngine engine, int code);
+}
 
-    // Attach an observer.
-    public void attach(SensorObserver observer) {
-        observers.add(observer);
-    }
-    
-    // Detach an observer.
-    public void detach(SensorObserver observer) {
-        observers.remove(observer);
-    }
-    
-    // Update sensor data and notify all observers.
-    public void setSensorData(SensorData data) {
-        this.sensorData = data;
-        notifyObservers();
-    }
-    
-    // Notify each observer with the new sensor data.
-    private void notifyObservers() {
-        for (SensorObserver observer : observers) {
-            observer.update(sensorData);
+class PlayingState extends GameState {
+    void handleInput(GameEngine engine, int code) {
+        switch (code) {
+            case 3: // Motion detected
+                System.out.println("Obstacle detected! Check if player dodges it.");
+                engine.sendFeedback(6); // Simulate hit for now
+                break;
+            case 4: // Power-up
+                System.out.println("Power-up collected!");
+                engine.sendFeedback(5);
+                break;
+            case 7: // Reset
+                System.out.println("Game resetting...");
+                engine.setState(new ReadyState());
+                break;
+            case 8: // Pause
+                System.out.println("Game paused");
+                engine.setState(new PausedState());
+                break;
         }
     }
 }
 
-// Class representing sensor data received from the microcontroller.
-class SensorData {
-    public float accelerationX;
-    public float accelerationY;
-    public float accelerationZ;
-    public boolean obstacleDetected;
-    public boolean buttonPressed;
-    
-    // Constructor to initialize sensor data.
-    public SensorData(float ax, float ay, float az, boolean obstacle, boolean button) {
-        this.accelerationX = ax;
-        this.accelerationY = ay;
-        this.accelerationZ = az;
-        this.obstacleDetected = obstacle;
-        this.buttonPressed = button;
-    }
-}
-
-// State pattern: Interface defining a game state.
-interface GameState {
-    // Process sensor input.
-    void handleInput(GameController context, SensorData data);
-    // Update game logic based on the current state.
-    void update(GameController context);
-    // Return the state's name for debugging/logging.
-    String getStateName();
-}
-
-// Concrete state representing the game in progress.
-class PlayingState implements GameState {
-    @Override
-    public void handleInput(GameController context, SensorData data) {
-        // If an obstacle is detected, transition to Game Over.
-        if (data.obstacleDetected) {
-            System.out.println("Obstacle hit! Changing state to Game Over.");
-            context.setState(new GameOverState());
-        }
-        // If the restart button is pressed, restart the game.
-        if (data.buttonPressed) {
-            System.out.println("Restarting game.");
-            context.setState(new PlayingState());
-        }
-        // Process movement using accelerometer data.
-        System.out.println("Player moving with acceleration: " +
-            data.accelerationX + ", " + data.accelerationY + ", " + data.accelerationZ);
-    }
-    
-    @Override
-    public void update(GameController context) {
-        // Update game logic while playing.
-        System.out.println("Game is running. Current state: " + getStateName());
-    }
-    
-    @Override
-    public String getStateName() {
-        return "Playing";
-    }
-}
-
-// Concrete state representing the game over condition.
-class GameOverState implements GameState {
-    @Override
-    public void handleInput(GameController context, SensorData data) {
-        // If restart button is pressed during Game Over, restart the game.
-        if (data.buttonPressed) {
-            System.out.println("Button pressed. Restarting game.");
-            context.setState(new PlayingState());
+class PausedState extends GameState {
+    void handleInput(GameEngine engine, int code) {
+        if (code == 8) { // Resume
+            System.out.println("Resuming game...");
+            engine.setState(new PlayingState());
         }
     }
-    
-    @Override
-    public void update(GameController context) {
-        System.out.println("Game Over. Waiting for restart...");
-    }
-    
-    @Override
-    public String getStateName() {
-        return "Game Over";
+}
+
+class ReadyState extends GameState {
+    void handleInput(GameEngine engine, int code) {
+        if (code == 7) {
+            System.out.println("Starting new game...");
+            engine.setState(new PlayingState());
+        }
     }
 }
 
-// Main game controller class implementing the Observer pattern.
-public class GameController implements SensorObserver {
+// === Game Engine ===
+public class GameEngine implements SerialPortEventListener {
+
+    private SerialPort serialPort;
+    private InputStream input;
+    private OutputStream output;
     private GameState currentState;
-    private SensorSubject sensorSubject;
-    
-    // Constructor sets the initial game state and attaches the observer.
-    public GameController() {
-        currentState = new PlayingState();
-        sensorSubject = new SensorSubject();
-        sensorSubject.attach(this);
+    private final List<GameObserver> observers = new ArrayList<>();
+
+    public GameEngine() {
+        this.currentState = new ReadyState();
     }
-    
-    // Transition to a new game state.
+
+    public void initialize() {
+        try {
+            CommPortIdentifier portId = CommPortIdentifier.getPortIdentifier("COM3");
+            serialPort = (SerialPort) portId.open("GameController", 2000);
+            serialPort.setSerialPortParams(9600, SerialPort.DATABITS_8, SerialPort.STOPBITS_1, SerialPort.PARITY_NONE);
+
+            input = serialPort.getInputStream();
+            output = serialPort.getOutputStream();
+            serialPort.addEventListener(this);
+            serialPort.notifyOnDataAvailable(true);
+
+            System.out.println("Connected to Arduino via COM3");
+        } catch (Exception e) {
+            System.err.println("Connection Error: " + e.getMessage());
+        }
+    }
+
     public void setState(GameState state) {
-        System.out.println("Transitioning from " + currentState.getStateName() +
-                           " to " + state.getStateName());
-        currentState = state;
+        this.currentState = state;
     }
-    
-    // Simulate receiving sensor data (in practice, data is received asynchronously via ZigBee).
-    public void receiveSensorData(SensorData data) {
-        sensorSubject.setSensorData(data);
+
+    public void sendFeedback(int code) {
+        try {
+            output.write(code);
+            output.flush();
+        } catch (IOException e) {
+            System.err.println("Failed to send: " + e.getMessage());
+        }
     }
-    
-    // Observer update method: Called when new sensor data is available.
-    @Override
-    public void update(SensorData data) {
-        currentState.handleInput(this, data);
-    }
-    
-    // Simulated game loop to process sensor data.
-    public void gameLoop() {
-        for (int i = 0; i < 5; i++) {
-            // Simulate sensor data; real data would come from the ZigBee module.
-            SensorData data = new SensorData(0.5f * i, 0.3f * i, 0.2f * i, i == 3, i == 4);
-            System.out.println("Received sensor data iteration " + i);
-            receiveSensorData(data);
-            currentState.update(this);
+
+    public void serialEvent(SerialPortEvent event) {
+        if (event.getEventType() == SerialPortEvent.DATA_AVAILABLE) {
             try {
-                Thread.sleep(1000); // Simulate delay between updates.
-            } catch (InterruptedException e) {
-                e.printStackTrace();
+                int code = input.read();
+                currentState.handleInput(this, code);
+                notifyObservers("Received code: " + code);
+            } catch (IOException e) {
+                System.err.println("Read error: " + e.getMessage());
             }
         }
     }
-    
-    // Main method to launch the game controller.
+
+    public void addObserver(GameObserver observer) {
+        observers.add(observer);
+    }
+
+    private void notifyObservers(String message) {
+        for (GameObserver o : observers) {
+            o.onEvent(message);
+        }
+    }
+
     public static void main(String[] args) {
-        GameController controller = new GameController();
-        controller.gameLoop();
+        GameEngine engine = new GameEngine();
+        engine.addObserver(msg -> System.out.println("[LOG] " + msg));
+        engine.initialize();
     }
 }
