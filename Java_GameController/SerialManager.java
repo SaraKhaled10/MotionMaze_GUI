@@ -14,7 +14,7 @@ public class SerialManager {
 
     public void initialize() {
         try {
-            portId = CommPortIdentifier.getPortIdentifier("COM3"); // 🔁 Update if needed
+            portId = CommPortIdentifier.getPortIdentifier("COM3"); // check later
             serialPort = (SerialPort) portId.open("MotionMaze", 2000);
             serialPort.setSerialPortParams(9600,
                     SerialPort.DATABITS_8,

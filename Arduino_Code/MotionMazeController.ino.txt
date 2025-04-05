@@ -1,28 +1,9 @@
-/**
- * Motion Maze Controller
- * 
- * This sketch runs on a Lilypad Arduino to control the Motion Maze game.
- * It reads data from an MPU6050 accelerometer for tilt detection,
- * a PIR motion sensor for obstacle detection, and a push button for game control.
- * It communicates bidirectionally with the Java game engine via ZigBee and provides
- * feedback through RGB LEDs, a buzzer, and a servo motor.
- * 
- * Components:
- * - MPU6050 accelerometer: Detects tilting for maze navigation
- * - PIR motion sensor: Introduces random obstacles when motion is detected
- * - Push button: Starts/pauses/restarts the game
- * - RGB LED: Provides visual feedback of game states
- * - Buzzer: Provides audio feedback for game events
- * - Servo motor: Controls a physical barrier that moves based on game events
- * - ZigBee module: Enables wireless communication with the Java game engine
- */
-
 #include <Wire.h>         // For I2C communication with MPU6050
 #include <SoftwareSerial.h> // For serial communication with ZigBee
 #include <MPU6050.h>      // Library for the accelerometer
 #include <Servo.h>        // Library for servo motor control
 
-// Pin Definitions - Clearly labeled for each component
+// Pin Definitions
 #define MOTION_SENSOR_PIN 2    // PIR motion sensor input
 #define BUTTON_PIN 3           // Push button for game start/restart
 #define RED_LED_PIN 6          // RGB LED Red component
@@ -73,10 +54,8 @@ bool ledState = false;
 int servoPosition = 90;  // Default servo position (centered)
 int servoDirection = 1;  // Direction of servo movement (1 = clockwise, -1 = counterclockwise)
 
-/**
- * Setup function - Initializes all hardware components
- * Runs once at startup to configure pins, communications, and peripherals
- */
+//Setup function - Initializes all hardware components
+ 
 void setup() {
   // Initialize pins - Set input/output modes
   pinMode(MOTION_SENSOR_PIN, INPUT);  // PIR sensor as input
@@ -115,10 +94,8 @@ void setup() {
   setLedColor(0, 0, 0);  // Turn off LEDs after startup
 }
 
-/**
- * Main program loop - Continuously checks sensors and updates state
- * Runs repeatedly to handle all game logic and communication
- */
+//Main program loop - Continuously checks sensors and updates state
+ 
 void loop() {
   unsigned long currentMillis = millis();  // Current time for timing operations
   
