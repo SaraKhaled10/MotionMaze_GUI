@@ -1,13 +1,17 @@
-import javax.swing.*;
+package project;
+
+
+import javax.swing.JFrame;
+import javax.swing.SwingUtilities;
 
 public class MainGame {
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> {
-            GameEngine engine = new GameEngine();
             JFrame frame = new JFrame("Motion Maze");
-            frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+            GameEngine engine = new GameEngine();
             frame.setContentPane(engine.getPanel());
             frame.pack();
+            frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
             frame.setVisible(true);
             engine.start();
         });
